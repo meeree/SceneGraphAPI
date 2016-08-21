@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <array>
 
 #include "sceneNode.h"
 
@@ -31,6 +32,9 @@ View::GraphicsContainer::GraphicsContainer ( GLuint const& width_, GLuint const&
         std::cerr<<"Failed to init glew."<<std::endl;
         exit (0);
     }
+
+    glEnable ( GL_DEPTH_TEST );
+    glDepthFunc ( GL_LESS );
     
     this->vertShader = this->loadInShader ( GL_VERTEX_SHADER, "./Shaders/viewer_vert.glsl" );
     this->fragShader = this->loadInShader ( GL_FRAGMENT_SHADER, "./Shaders/viewer_frag.glsl" );
@@ -93,27 +97,31 @@ GLuint View::GraphicsContainer::loadInShader(GLenum const &shaderType, char cons
 
 void View::draw () 
 {
-    double transMat[4][4] {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
-    root->retrieve ( objStack, transMat );
+    std::stack<std::array<std::array<double,4>,4>> matStack {};
+    matStack.push ( {{{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}}} );
+    root->retrieve ( objStack, matStack );
     while ( objStack.size () > 0 ) 
     {
         Object* obj { objStack.top () };
         objStack.pop ();
+        auto const& dynamVerts { obj->getDynamVerts () };
         switch ( obj->type ) 
         {
             case Object::obj_type_t::CUBE:
-                auto const& verts = static_cast<Cube*>( obj )->dynamVerts;
                 std::vector<GLfloat>& placeVec { vertMap[Object::obj_type_t::CUBE] };
-                for ( auto const &vert: verts ) 
+                for ( auto const &vert: dynamVerts ) 
                 {
                     placeVec.push_back ( vert );
                 }
                 break;
         }
     }
+    
+    /* ALL THE STUFF ABOVE SHOULD BE PUT INTO A GENERAL FUNCTION ON ANOTHER CLASS
+     * BECAUSE THE BELOW STUFF IS FOR SPECIFIC RENDERING BUT THE ABOVE IS NOT */
 
     /* clear the scene */
-    glClear ( GL_COLOR_BUFFER_BIT );
+    glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
     glBindVertexArray ( graphics.vao );
     glBindBuffer ( GL_ARRAY_BUFFER, graphics.vbo );
 
@@ -139,26 +147,34 @@ void View::draw ()
 
 int main () 
 {
+    /*NOTE: GET INSTANCING WORKING! */
+    Cube c2 {};
     Cube c {};
-    ObjSceneNode s { &c };
-    GroupSceneNode gs { {&s} };
-    View v { 700, 700, &gs };
 
-//    auto PVM = glGetUniformLocation ( v.graphics.shaderProg, "PVM" );
-//    glm::mat4 projection, view, model;
-//    view = glm::lookAt ( glm::vec3(0,4,-4), glm::vec3(0,0,0), glm::vec3(0,1,0) );
-//    projection = glm::perspective ( glm::radians ( 45.0f ), 1.0f, 0.1f, 10.0f );
-//
-//    glUniformMatrix4fv ( PVM, 1, GL_FALSE, glm::value_ptr ( projection * view * model ) );
+    ObjSceneNode s2 { &c2 };
+    ObjSceneNode s { &c, {&s2} };
+
+    View v { 700, 700, &s };
+    /* scaling */ 
+    s2.transform ( {{{0.1,0,0,0},{0,0.1,0,0},{0,0,0.1,0},{0,0,0,1}}} );
+    /* translation */
+//    s2.transform ( {{{1,0,0,1},{0,1,0,1},{0,0,1,1},{0,0,0,1}}} );
+
+    auto PVM = glGetUniformLocation ( v.graphics.shaderProg, "PVM" );
+    glm::mat4 projection, view, model;
+    view = glm::lookAt ( glm::vec3(5,5,-5), glm::vec3(0,0,0), glm::vec3(0,1,0) );
+    projection = glm::perspective ( glm::radians ( 45.0f ), 1.0f, 0.001f, 15.0f );
+
+    glUniformMatrix4fv ( PVM, 1, GL_FALSE, glm::value_ptr ( projection * view * model ) );
 
     while ( true ) 
     {
         v.draw ();
-//        model = glm::rotate ( model, 0.01f, glm::vec3 ( 0.0f, 1.0f, 0.0f ) );
+//        model = glm::rotate ( model, 0.01f, glm::vec3 ( 1.0f, 1.0f, 1.0f ) );
 //        glUniformMatrix4fv ( PVM, 1, GL_FALSE, glm::value_ptr ( projection * view * model ) );
-//        s.transform ( {{1,0,0,0.02},{0,1,0,0},{0,0,1,0},{0,0,0,1}} );
-//        s.transform ( {{(GLfloat)cos(0.017),(GLfloat)-sin(.017),0,0},{(GLfloat)sin(.017),(GLfloat)cos(.017),0,0},{0,0,1,0},{0,0,0,1}} );
-//        s.transform ( transMat );
-//        i += 1;
+//        s.transform ( {{{1,0,0,0.02},{0,1,0,0},{0,0,1,0},{0,0,0,1}}}, false );
+//        s.transform ( {{{(GLfloat)cos(0.017),(GLfloat)-sin(.017),0,0},{sin(.017),cos(.017),0,0},{0,0,1,0},{0,0,0,1}}} );
+        s.transform ( {{{1.0f, 0.0f, 0.0f},{0.0f,cos(0.017),sin(0.017),0.0f},{0.0f,-sin(0.017),cos(0.017),0.0f},{0.0f,0.0f,0.0f,1.0f}}} );
+//        s.transform ( {{{cos(0.017),0,sin(.017),0},{0,1,0,0},{-sin(.017),0,cos(.017),0},{0,0,0,1}}} );
     }
 }

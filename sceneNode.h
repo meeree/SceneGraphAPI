@@ -3,8 +3,10 @@
 
 #include <vector>
 #include <stack>
+#include <array>
 
 class Object;
+typedef std::array<std::array<double,4>,4> matType;
  
 /* Scene Node class
  * Not intended to be used by the user; it is only designed
@@ -13,7 +15,7 @@ class Object;
 class SceneNode
 {
 public:
-    virtual void retrieve ( std::stack<Object*> &objStack, double (&totalTransMat)[4][4] ) = 0;             
+    virtual void retrieve ( std::stack<Object*> &objStack, std::stack<matType>& matStack ) = 0;             
     void addChild ( SceneNode* child ); 
 protected:
     SceneNode () = default;
@@ -30,7 +32,7 @@ class GroupSceneNode : public SceneNode
 {
 public:
     GroupSceneNode ( std::vector<SceneNode*> const& children_ );
-    void retrieve ( std::stack<Object*> &objStack, double (&totalTransMat)[4][4] ) override;
+    void retrieve ( std::stack<Object*> &objStack, std::stack<matType>& matStack ) override;
 };
 
 /* Transformation Scene Node class
@@ -41,13 +43,15 @@ public:
 class TransSceneNode : public SceneNode
 {
 public:
-    void transform ( double const (&concTransMat)[4][4] );
+    void transform ( matType const& concMat, bool left=true );
 protected:
-    static void transMul ( double (&transMat1)[4][4], double const (&transMat2)[4][4] );
+    static void leftMul ( matType& mat1, matType const& mat2 );
+    static void rightMul ( matType& mat1, matType const& mat2 );
 
     TransSceneNode () = default;
-    TransSceneNode ( std::vector<SceneNode*> const& children_, double const (&transMat_)[4][4] );
-    double transMat [4][4];
+    TransSceneNode ( std::vector<SceneNode*> const& children_, matType const& mat_ );
+    matType mat;
+
 };
 
 /* Tranformation Group Scene Node class
@@ -59,8 +63,8 @@ protected:
 class TransGroupSceneNode : public TransSceneNode 
 {
 public:
-    TransGroupSceneNode ( std::vector<SceneNode*> const& children_, double const (&transMat_)[4][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}} );
-    void retrieve ( std::stack<Object*> &objStack, double (&totalTransMat)[4][4] ) override;
+    TransGroupSceneNode ( std::vector<SceneNode*> const& children_, matType const& mat_= {{{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}}} );
+    void retrieve ( std::stack<Object*> &objStack, std::stack<matType>& matStack ) override;
 };
 
 /* Object Scene Node class
@@ -71,11 +75,14 @@ public:
 class ObjSceneNode : public TransSceneNode 
 {
 public:
-    ObjSceneNode ( Object* obj_, std::vector<SceneNode*> const& children_={}, double const(&transMat_)[4][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}} );
-    ObjSceneNode ( Object* obj_, double const(&transMat_)[4][4] );
-    void retrieve ( std::stack<Object*> &objStack, double (&totalTransMat)[4][4] ) override;
+    ObjSceneNode ( Object* obj_, std::vector<SceneNode*> const& children_ = {}, matType const& mat_ = {{{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}}} );
+    ObjSceneNode ( Object* obj_, matType const& mat_ );
+    void retrieve ( std::stack<Object*> &objStack, std::stack<matType>& matStack ) override;
 private:
     Object* obj;
+    /* this is a stack because we can have multiple paths to 
+     * one object: leading to multiple sets of vertices */
+    std::stack<std::vector<double>> relativeVerts;
 };
 
 #endif
