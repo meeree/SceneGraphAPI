@@ -30,8 +30,6 @@ private:
     };
 
     SceneNode* root;
-    std::map<Object::obj_type_t, std::vector<GLfloat>> vertMap;
-    std::stack<Object*> objStack;
 public:
     View ( GLuint const& width_, GLuint const& height_, SceneNode* root_ ); 
     void draw ();

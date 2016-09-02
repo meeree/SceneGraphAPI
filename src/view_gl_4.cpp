@@ -5,6 +5,7 @@
 #include <array>
 
 #include "sceneNode.h"
+#include "quadMat.h"
 
 View::View ( GLuint const& width_, GLuint const& height_, SceneNode* root_ ) 
     : graphics { width_, height_ }, root { root_ } 
@@ -97,47 +98,29 @@ GLuint View::GraphicsContainer::loadInShader(GLenum const &shaderType, char cons
 
 void View::draw () 
 {
-    std::stack<std::array<std::array<double,4>,4>> matStack {};
+    std::stack<std::pair<Object*,std::vector<double>>> objPosStack {};
+    std::stack<QuadMat> matStack {};
     matStack.push ( {{{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}}} );
-    root->retrieve ( objStack, matStack );
-    while ( objStack.size () > 0 ) 
-    {
-        Object* obj { objStack.top () };
-        objStack.pop ();
-        auto const& dynamVerts { obj->getDynamVerts () };
-        switch ( obj->type ) 
-        {
-            case Object::obj_type_t::CUBE:
-                std::vector<GLfloat>& placeVec { vertMap[Object::obj_type_t::CUBE] };
-                for ( auto const &vert: dynamVerts ) 
-                {
-                    placeVec.push_back ( vert );
-                }
-                break;
-        }
-    }
-    
-    /* ALL THE STUFF ABOVE SHOULD BE PUT INTO A GENERAL FUNCTION ON ANOTHER CLASS
-     * BECAUSE THE BELOW STUFF IS FOR SPECIFIC RENDERING BUT THE ABOVE IS NOT */
+	root->retrieve ( objPosStack, matStack );
 
     /* clear the scene */
     glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
     glBindVertexArray ( graphics.vao );
     glBindBuffer ( GL_ARRAY_BUFFER, graphics.vbo );
 
-    for ( auto& vertMapping: vertMap ) 
+	while ( objPosStack.size () > 0 )
     {
-        switch ( vertMapping.first ) 
-        {
-            case Object::obj_type_t::CUBE:
-                /* apply special cube renderer */
-                std::vector<GLfloat> &verts { vertMapping.second };
-                glBufferData ( GL_ARRAY_BUFFER, verts.size () * sizeof ( GLfloat ), verts.data (), GL_DYNAMIC_DRAW );
-                /* draw the cubes */
-                glDrawArrays ( GL_TRIANGLES, 0, (GLint)( verts.size()/3 ) );
-                verts.clear ();
-                break;
-        }
+		auto objPosPair = objPosStack.top ();
+		auto obj = objPosPair.first;
+		auto verts = objPosPair.second;
+        /* convert verts from vector<double> to vector<GLfloat> */
+		std::vector<GLfloat> glVerts ( verts.begin (), verts.end () );
+		/* bind texture, etc... */
+		glBufferData ( GL_ARRAY_BUFFER, glVerts.size () * sizeof ( GLfloat ), glVerts.data (), GL_DYNAMIC_DRAW );
+		/* draw the cubes */
+		glDrawArrays ( GL_TRIANGLES, 0, (GLint)( glVerts.size()/3 ) );
+		verts.clear ();
+		break;
     }
 
     /* update the scene */
@@ -147,23 +130,24 @@ void View::draw ()
 
 int main () 
 {
+    /* COME UP WITH A BETTER SOLUTION TO LETTING SCENE NODES KNOW HOW MANY PARENTS
+     * THEY HAVE */ 
     /*NOTE: GET INSTANCING WORKING! */
-    Cube c2 {};
     Cube c {};
 
-    ObjSceneNode s2 { &c2 };
-    ObjSceneNode s { &c, {&s2} };
+    ObjSceneNode s2 { &c };
+//    ObjSceneNode s { &c, {&s2} };
 
-    View v { 700, 700, &s };
-    /* scaling */ 
-    s2.transform ( {{{0.1,0,0,0},{0,0.1,0,0},{0,0,0.1,0},{0,0,0,1}}} );
-    /* translation */
+    View v { 700, 700, &s2 };
+//    /* scaling */ 
+//    s2.transform ( {{{0.1,0,0,0},{0,0.1,0,0},{0,0,0.1,0},{0,0,0,1}}} );
+//    /* translation */
 //    s2.transform ( {{{1,0,0,1},{0,1,0,1},{0,0,1,1},{0,0,0,1}}} );
 
     auto PVM = glGetUniformLocation ( v.graphics.shaderProg, "PVM" );
     glm::mat4 projection, view, model;
-    view = glm::lookAt ( glm::vec3(5,5,-5), glm::vec3(0,0,0), glm::vec3(0,1,0) );
-    projection = glm::perspective ( glm::radians ( 45.0f ), 1.0f, 0.001f, 15.0f );
+    view = glm::lookAt ( glm::vec3(3,3,-3), glm::vec3(0,0,0), glm::vec3(0,1,0) );
+    projection = glm::perspective ( glm::radians ( 45.0f ), 1.0f, 0.1f, 10.0f );
 
     glUniformMatrix4fv ( PVM, 1, GL_FALSE, glm::value_ptr ( projection * view * model ) );
 
@@ -174,7 +158,7 @@ int main ()
 //        glUniformMatrix4fv ( PVM, 1, GL_FALSE, glm::value_ptr ( projection * view * model ) );
 //        s.transform ( {{{1,0,0,0.02},{0,1,0,0},{0,0,1,0},{0,0,0,1}}}, false );
 //        s.transform ( {{{(GLfloat)cos(0.017),(GLfloat)-sin(.017),0,0},{sin(.017),cos(.017),0,0},{0,0,1,0},{0,0,0,1}}} );
-        s.transform ( {{{1.0f, 0.0f, 0.0f},{0.0f,cos(0.017),sin(0.017),0.0f},{0.0f,-sin(0.017),cos(0.017),0.0f},{0.0f,0.0f,0.0f,1.0f}}} );
+//        s.transform ( {{{1.0f, 0.0f, 0.0f},{0.0f,cos(0.017),sin(0.017),0.0f},{0.0f,-sin(0.017),cos(0.017),0.0f},{0.0f,0.0f,0.0f,1.0f}}} );
 //        s.transform ( {{{cos(0.017),0,sin(.017),0},{0,1,0,0},{-sin(.017),0,cos(.017),0},{0,0,0,1}}} );
     }
 }
